@@ -9,12 +9,14 @@ app = Flask(__name__)
 def home():
     return "🚀 Welcome to the Fraud Detection API! Use /predict to detect fraud."
 
+# Load model, encoder, scaler, and classes
 try:
     model = pickle.load(open("fraud_detection_model.pkl", "rb"))
     encoder = pickle.load(open("encoder.pkl", "rb"))
     scaler = pickle.load(open("scaler.pkl", "rb"))
     encoder_classes = np.load("encoder_classes.npy", allow_pickle=True)
-    print("✅ Model, Encoder, and Scaler loaded successfully!")
+    print(f"✅ Model, Encoder, and Scaler loaded successfully!")
+    print(f"Encoder classes: {encoder_classes}")
 except Exception as e:
     print(f"❌ Error loading model files: {e}")
     raise
@@ -26,35 +28,49 @@ def map_transaction_data(transaction):
         if field not in transaction:
             raise ValueError(f"⚠️ Missing required field: {field}")
 
+    # Validate transaction type against encoder classes
+    transaction_type = transaction["transaction_type"]
+    print(f"Received transaction type: {transaction_type}")
+    if transaction_type not in encoder_classes:
+        raise ValueError(f"Invalid transaction type: {transaction_type}. Expected one of {list(encoder_classes)}")
+
+    # Encode transaction type
     try:
-        print(f"Encoding transaction type: {transaction['transaction_type']}")
-        transaction_type_encoded = encoder.transform([[transaction["transaction_type"]]]).toarray()[0]
+        print(f"Encoding transaction type: {transaction_type}")
+        transaction_type_encoded = encoder.transform([[transaction_type]])
+        transaction_type_encoded = transaction_type_encoded.toarray() if hasattr(transaction_type_encoded, "toarray") else transaction_type_encoded
+        transaction_type_encoded = transaction_type_encoded[0]  # Extract first array
         print(f"Encoded transaction type: {transaction_type_encoded}")
     except ValueError as ve:
         print(f"Error encoding transaction type: {ve}")
-        transaction_type_encoded = -1
+        raise
 
+    # Create DataFrame
     print("Creating DataFrame")
     df = pd.DataFrame([{
         "step": 1,
-        "type": transaction_type_encoded,
+        "type": transaction_type_encoded[0],
         "amount": transaction["amount"],
         "oldbalanceOrg": transaction["oldbalanceOrg"],
         "newbalanceOrig": transaction["newbalanceOrig"],
         "oldbalanceDest": transaction["oldbalanceDest"],
-        "newbalanceDest": transaction["newbalanceDest"],
-        "balance_change_orig": (transaction["oldbalanceOrg"] - transaction["newbalanceOrig"]) / (transaction["oldbalanceOrg"] + 1),
-        "balance_change_dest": (transaction["newbalanceDest"] - transaction["oldbalanceDest"]) / (transaction["oldbalanceDest"] + 1)
+        "newbalanceDest": transaction["newbalanceDest"]
     }])
 
-    correct_order = ["step", "type", "amount", "oldbalanceOrg", "newbalanceOrig", "oldbalanceDest", "newbalanceDest", "balance_change_orig", "balance_change_dest"]
-    df = df[correct_order]
+    # Define the correct order of features
+    correct_order = ["step", "type", "amount", "oldbalanceOrg", "newbalanceOrig", "oldbalanceDest", "newbalanceDest"]
+    df = df[correct_order].copy()
     print(f"DataFrame created: {df.to_dict(orient='records')}")
 
-    num_cols = ["step", "amount", "oldbalanceOrg", "newbalanceOrig", "oldbalanceDest", "newbalanceDest", "balance_change_orig", "balance_change_dest"]
+    # Scale numerical features
+    num_cols = ["step", "amount", "oldbalanceOrg", "newbalanceOrig", "oldbalanceDest", "newbalanceDest"]
     print("Scaling numerical features")
-    df[num_cols] = scaler.transform(df[num_cols])
-    print("Scaling completed")
+    try:
+        df[num_cols] = scaler.transform(df[num_cols])
+        print("Scaling completed")
+    except Exception as e:
+        print(f"Error during scaling: {e}")
+        raise
 
     return df
 
