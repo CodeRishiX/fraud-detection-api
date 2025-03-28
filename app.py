@@ -38,17 +38,20 @@ def map_transaction_data(transaction):
         if field not in transaction:
             raise ValueError(f"⚠️ Missing required field: {field}")
 
-    # Validate transaction type against encoder classes
-    transaction_type = transaction["transaction_type"]
-    print(f"Received transaction type: {transaction_type}")
-    if transaction_type not in encoder_classes:
-        raise ValueError(f"Invalid transaction type: {transaction_type}. Expected one of {list(encoder_classes)}")
+    # Normalize transaction type (change to uppercase if your encoder expects uppercase)
+    transaction_type_input = transaction["transaction_type"].strip().upper()
+    print(f"Received transaction type (normalized): {transaction_type_input}")
+
+    # Normalize encoder_classes for comparison – adjust if needed
+    expected_types = [str(x).strip().upper() for x in encoder_classes]
+    if transaction_type_input not in expected_types:
+        raise ValueError(f"Invalid transaction type: {transaction_type_input}. Expected one of {expected_types}")
 
     # Encode transaction type
     try:
-        print(f"Encoding transaction type: {transaction_type}")
+        print(f"Encoding transaction type: {transaction_type_input}")
         # Use a one-element list to support both LabelEncoder and OneHotEncoder
-        encoded = encoder.transform([transaction_type])
+        encoded = encoder.transform([transaction_type_input])
         try:
             # If the output is sparse, convert to dense array
             encoded = encoded.toarray()
@@ -67,9 +70,6 @@ def map_transaction_data(transaction):
 
     # Create DataFrame
     print("Creating DataFrame")
-    # If your model was trained with a single numeric encoding (LabelEncoder),
-    # then include the scalar value. If your model expects a vector (OneHotEncoder),
-    # you'll need to modify this section to include all encoded features.
     df = pd.DataFrame([{
         "step": 1,
         "type": transaction_type_encoded[0] if isinstance(transaction_type_encoded,
