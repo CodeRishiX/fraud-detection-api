@@ -5,9 +5,11 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
+
 @app.route("/")
 def home():
     return "🚀 Welcome to the Fraud Detection API! Use /predict to detect fraud."
+
 
 # Load model, encoder, scaler, and classes
 try:
@@ -15,15 +17,23 @@ try:
     encoder = pickle.load(open("encoder.pkl", "rb"))
     scaler = pickle.load(open("scaler.pkl", "rb"))
     encoder_classes = np.load("encoder_classes.npy", allow_pickle=True)
-    print(f"✅ Model, Encoder, and Scaler loaded successfully!")
+    print("✅ Model, Encoder, and Scaler loaded successfully!")
     print(f"Encoder classes: {encoder_classes}")
 except Exception as e:
     print(f"❌ Error loading model files: {e}")
     raise
 
+
 def map_transaction_data(transaction):
     print("Starting map_transaction_data")
-    required_fields = ["amount", "oldbalanceOrg", "newbalanceOrig", "oldbalanceDest", "newbalanceDest", "transaction_type"]
+    required_fields = [
+        "amount",
+        "oldbalanceOrg",
+        "newbalanceOrig",
+        "oldbalanceDest",
+        "newbalanceDest",
+        "transaction_type"
+    ]
     for field in required_fields:
         if field not in transaction:
             raise ValueError(f"⚠️ Missing required field: {field}")
@@ -37,19 +47,33 @@ def map_transaction_data(transaction):
     # Encode transaction type
     try:
         print(f"Encoding transaction type: {transaction_type}")
-        transaction_type_encoded = encoder.transform([[transaction_type]])
-        transaction_type_encoded = transaction_type_encoded.toarray() if hasattr(transaction_type_encoded, "toarray") else transaction_type_encoded
-        transaction_type_encoded = transaction_type_encoded[0]  # Extract first array
+        # Use a one-element list to support both LabelEncoder and OneHotEncoder
+        encoded = encoder.transform([transaction_type])
+        try:
+            # If the output is sparse, convert to dense array
+            encoded = encoded.toarray()
+        except AttributeError:
+            # Otherwise, assume it's already a NumPy array
+            pass
+        # If the encoder returns a 2D array (e.g., one-hot), flatten it.
+        if encoded.ndim == 2:
+            transaction_type_encoded = encoded[0]
+        else:
+            transaction_type_encoded = encoded
         print(f"Encoded transaction type: {transaction_type_encoded}")
-    except ValueError as ve:
-        print(f"Error encoding transaction type: {ve}")
+    except Exception as e:
+        print(f"Error encoding transaction type: {e}")
         raise
 
     # Create DataFrame
     print("Creating DataFrame")
+    # If your model was trained with a single numeric encoding (LabelEncoder),
+    # then include the scalar value. If your model expects a vector (OneHotEncoder),
+    # you'll need to modify this section to include all encoded features.
     df = pd.DataFrame([{
         "step": 1,
-        "type": transaction_type_encoded[0],
+        "type": transaction_type_encoded[0] if isinstance(transaction_type_encoded,
+                                                          np.ndarray) and transaction_type_encoded.ndim > 0 else transaction_type_encoded,
         "amount": transaction["amount"],
         "oldbalanceOrg": transaction["oldbalanceOrg"],
         "newbalanceOrig": transaction["newbalanceOrig"],
@@ -74,6 +98,7 @@ def map_transaction_data(transaction):
 
     return df
 
+
 @app.route("/predict", methods=["POST"])
 def predict_fraud():
     print("Received request to /predict")
@@ -94,6 +119,7 @@ def predict_fraud():
     except Exception as e:
         print(f"❌ Internal Server Error in /predict: {str(e)}")
         return jsonify({"error": f"Internal Server Error: {str(e)}"}), 500
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)
