@@ -65,13 +65,7 @@ def map_transaction_data(transaction):
         print(f"Error encoding transaction type: {e}")
         raise
 
-    # Calculate balance change features
-    balance_change_orig = (transaction["oldbalanceOrg"] - transaction["newbalanceOrig"]) / (transaction["oldbalanceOrg"] + 1)
-    balance_change_dest = (transaction["newbalanceDest"] - transaction["oldbalanceDest"]) / (transaction["oldbalanceDest"] + 1)
-    print(f"Calculated balance_change_orig: {balance_change_orig}")
-    print(f"Calculated balance_change_dest: {balance_change_dest}")
-
-    # Create DataFrame with all features, including balance_change_orig and balance_change_dest
+    # Create DataFrame without balance_change features
     print("Creating DataFrame")
     df = pd.DataFrame([{
         "step": 1,
@@ -80,12 +74,10 @@ def map_transaction_data(transaction):
         "oldbalanceOrg": transaction["oldbalanceOrg"],
         "newbalanceOrig": transaction["newbalanceOrig"],
         "oldbalanceDest": transaction["oldbalanceDest"],
-        "newbalanceDest": transaction["newbalanceDest"],
-        "balance_change_orig": balance_change_orig,
-        "balance_change_dest": balance_change_dest
+        "newbalanceDest": transaction["newbalanceDest"]
     }])
 
-    # Define the correct order of features, including the balance change features
+    # Define the correct order of features, excluding balance_change features
     correct_order = [
         "step",
         "type",
@@ -93,9 +85,7 @@ def map_transaction_data(transaction):
         "oldbalanceOrg",
         "newbalanceOrig",
         "oldbalanceDest",
-        "newbalanceDest",
-        "balance_change_orig",
-        "balance_change_dest"
+        "newbalanceDest"
     ]
     df = df[correct_order].copy()
     print(f"DataFrame created: {df.to_dict(orient='records')}")
@@ -107,9 +97,7 @@ def map_transaction_data(transaction):
         "oldbalanceOrg",
         "newbalanceOrig",
         "oldbalanceDest",
-        "newbalanceDest",
-        "balance_change_orig",
-        "balance_change_dest"
+        "newbalanceDest"
     ]
     print("Scaling numerical features")
     try:
