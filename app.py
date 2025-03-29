@@ -5,11 +5,9 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-
 @app.route("/")
 def home():
     return "🚀 Welcome to the Fraud Detection API! Use /predict to detect fraud."
-
 
 # Load model, encoder, scaler, and classes
 try:
@@ -22,7 +20,6 @@ try:
 except Exception as e:
     print(f"❌ Error loading model files: {e}")
     raise
-
 
 def map_transaction_data(transaction):
     print("Starting map_transaction_data")
@@ -68,26 +65,52 @@ def map_transaction_data(transaction):
         print(f"Error encoding transaction type: {e}")
         raise
 
-    # Create DataFrame
+    # Calculate balance change features
+    balance_change_orig = (transaction["oldbalanceOrg"] - transaction["newbalanceOrig"]) / (transaction["oldbalanceOrg"] + 1)
+    balance_change_dest = (transaction["newbalanceDest"] - transaction["oldbalanceDest"]) / (transaction["oldbalanceDest"] + 1)
+    print(f"Calculated balance_change_orig: {balance_change_orig}")
+    print(f"Calculated balance_change_dest: {balance_change_dest}")
+
+    # Create DataFrame with all features, including balance_change_orig and balance_change_dest
     print("Creating DataFrame")
     df = pd.DataFrame([{
         "step": 1,
-        "type": transaction_type_encoded[0] if isinstance(transaction_type_encoded,
-                                                          np.ndarray) and transaction_type_encoded.ndim > 0 else transaction_type_encoded,
+        "type": transaction_type_encoded[0] if isinstance(transaction_type_encoded, np.ndarray) and transaction_type_encoded.ndim > 0 else transaction_type_encoded,
         "amount": transaction["amount"],
         "oldbalanceOrg": transaction["oldbalanceOrg"],
         "newbalanceOrig": transaction["newbalanceOrig"],
         "oldbalanceDest": transaction["oldbalanceDest"],
-        "newbalanceDest": transaction["newbalanceDest"]
+        "newbalanceDest": transaction["newbalanceDest"],
+        "balance_change_orig": balance_change_orig,
+        "balance_change_dest": balance_change_dest
     }])
 
-    # Define the correct order of features
-    correct_order = ["step", "type", "amount", "oldbalanceOrg", "newbalanceOrig", "oldbalanceDest", "newbalanceDest"]
+    # Define the correct order of features, including the balance change features
+    correct_order = [
+        "step",
+        "type",
+        "amount",
+        "oldbalanceOrg",
+        "newbalanceOrig",
+        "oldbalanceDest",
+        "newbalanceDest",
+        "balance_change_orig",
+        "balance_change_dest"
+    ]
     df = df[correct_order].copy()
     print(f"DataFrame created: {df.to_dict(orient='records')}")
 
     # Scale numerical features
-    num_cols = ["step", "amount", "oldbalanceOrg", "newbalanceOrig", "oldbalanceDest", "newbalanceDest"]
+    num_cols = [
+        "step",
+        "amount",
+        "oldbalanceOrg",
+        "newbalanceOrig",
+        "oldbalanceDest",
+        "newbalanceDest",
+        "balance_change_orig",
+        "balance_change_dest"
+    ]
     print("Scaling numerical features")
     try:
         df[num_cols] = scaler.transform(df[num_cols])
@@ -97,7 +120,6 @@ def map_transaction_data(transaction):
         raise
 
     return df
-
 
 @app.route("/predict", methods=["POST"])
 def predict_fraud():
@@ -119,7 +141,6 @@ def predict_fraud():
     except Exception as e:
         print(f"❌ Internal Server Error in /predict: {str(e)}")
         return jsonify({"error": f"Internal Server Error: {str(e)}"}), 500
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)
