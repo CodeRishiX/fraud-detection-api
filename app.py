@@ -3,6 +3,17 @@ import numpy as np
 import pandas as pd
 from flask import Flask, request, jsonify
 
+from flask import Flask, jsonify
+
+app = Flask(__name__)
+
+# Add this route
+@app.route('/health')
+def health_check():
+    return jsonify({"status": "ok"}), 200
+
+# ... rest of your code ...
+
 # ✅ Initialize Flask app
 app = Flask(__name__)
 
